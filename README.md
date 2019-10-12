@@ -12,5 +12,5 @@ I couldn't find any way to get incoming messages real-time so the application wi
 cp config.example.yml config.yml
 vi config.yml
 pip install -r requirements.txt
-python beekeper_bot/main.py
+python main.py
 ```
