@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 
 from beekeeper_api.client import BeekeeperClient
+from beekeeper_api.conversation import Conversation
 from beekeeper_api.message import Message
 from beekeeper_api.util import bkdt_to_dt, dt_to_bkdt
 from beekeeper_bot.bot_settings import BeekeeperBotSettings
@@ -41,52 +42,59 @@ class BeekeeperBot:
         for cb in self.callbacks:
             await cb(self, message)
 
+    async def _poll_conversation(self, conv):
+        """
+        Get new messages from given conversation
+        Args:
+            conv (Conversation): conversation object
+        Returns:
+            None
+        """
+        # is_unread wasn't always properly set for me, so I'm looking at `modified` here to see if we received new msg
+        # even though we will also process messages that were sent by us, the bot doesn't miss any messages this way
+        if bkdt_to_dt(conv.modified) == self.conversation_data[conv.id]['last_modified']:
+            return
+
+        logger.debug(f'Got unread message in {conv.name}, snippet: {conv.snippet}')
+
+        if conv.id in self.conversation_data:
+            after_date = self.conversation_data[conv.id]['last_modified'] - timedelta(seconds=1)
+            messages = await conv.get_messages(after=dt_to_bkdt(after_date))
+
+            self.conversation_data[conv.id]['last_modified'] = bkdt_to_dt(conv.modified)
+        else:
+            messages = await conv.get_messages()
+            self.conversation_data[conv.id] = {
+                'last_modified': bkdt_to_dt(conv.modified),
+                'messages_read': set()
+            }
+
+        if not messages:
+            logger.warning(f'No messages for conversation {conv.name} even though it was marked as unread')
+            return
+
+        for message in messages:
+            if message.sent_by_user:
+                continue
+
+            if message.id in self.conversation_data[conv.id]['messages_read']:
+                continue
+
+            self.conversation_data[conv.id]['messages_read'].add(message.id)
+
+            await self._on_message(message)
+
+        await conv.mark_read()
+
     async def _poll_messages(self):
         """
-        Called at every X seconds
+        Called at every X seconds to poll all conversations
         Returns:
             None
         """
         conversations = await self.client.get_conversations()
-
-        for conv in conversations:
-            if not conv.is_unread:
-                continue
-
-            logger.debug(f'Got unread message, snippet: {conv.snippet}')
-
-            if conv.id in self.conversation_data:
-                after_date = self.conversation_data[conv.id]['last_modified'] - timedelta(seconds=1)
-                messages = await conv.get_messages(after=dt_to_bkdt(after_date))
-            else:
-                messages = await conv.get_messages()
-                self.conversation_data[conv.id] = {
-                    'last_modified': bkdt_to_dt(conv.modified),
-                    'read_messages': set()
-                }
-
-            if not messages:
-                logger.warning(f'No messages for conversation {conv.name} even though it was `unread`')
-                continue
-
-            for message in messages:
-                message.conversation = conv
-
-            self.conversation_data[conv.id]['last_modified'] = bkdt_to_dt(conv.modified)
-
-            for message in messages:
-                if message.profile.startswith('bot_'):
-                    continue
-
-                if message.id in self.conversation_data[conv.id]['read_messages']:
-                    logger.debug(f'Got message that was already processed: {message.id} :: {message.text}')
-                    continue
-
-                self.conversation_data[conv.id]['read_messages'].add(message.id)
-
-                await self._on_message(message)
-
-            await conv.mark_read()
+        futures = [self._poll_conversation(conv) for conv in conversations]
+        await asyncio.gather(*futures)
 
     def add_callback(self, callback):
         """
@@ -112,7 +120,7 @@ class BeekeeperBot:
             if messages:
                 self.conversation_data[conv.id] = {
                     'last_modified': bkdt_to_dt(conv.modified),
-                    'read_messages': set()
+                    'messages_read': set()
                 }
                 futures.append(messages[0].mark_read())
 

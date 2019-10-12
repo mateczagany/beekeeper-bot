@@ -25,7 +25,7 @@ class Message:
     id: int
     uuid: str
 
-    current_receipt_state: str  # it's not actually in Beekeeper docs? it's useful for the bot though
+    current_receipt_state: str  # it's not actually in Beekeeper docs? it might be useful for the bot though
 
     conversation: Conversation = None
 

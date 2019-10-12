@@ -63,7 +63,13 @@ class Conversation:
             list[Message]: messages
         """
         result = await self.client.get(f'/conversations/{self.id}/messages', params=kwargs)
-        return [Message.from_dict(client=self.client, data=message_raw) for message_raw in result]
+        messages = []
+        for message_raw in result:
+            message = Message.from_dict(client=self.client, data=message_raw)
+            message.conversation = self
+            messages.append(message)
+
+        return messages
 
     async def send_message(self, text, message_type='regular'):
         """
