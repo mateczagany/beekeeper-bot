@@ -10,6 +10,9 @@ from beekeeper_api.exceptions import BeekeeperBotException
 logger = logging.getLogger(__name__)
 
 
+API_VERSION = 2
+
+
 class BeekeeperClient:
     def __init__(self, client_settings):
         """
@@ -52,7 +55,7 @@ class BeekeeperClient:
         if endpoint[0] != '/':
             endpoint = f'/{endpoint}'
 
-        return f'https://{self.client_settings.subdomain}.beekeeper.io/api/{self.client_settings.api_version}{endpoint}'
+        return f'https://{self.client_settings.subdomain}.beekeeper.io/api/{API_VERSION}{endpoint}'
 
     def _get_headers(self):
         """

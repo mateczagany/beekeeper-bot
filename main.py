@@ -40,7 +40,6 @@ async def main():
 
     client_settings = BeekeeperClientSettings(
         subdomain=config['beekeeper_client']['subdomain'],
-        api_version=config['beekeeper_client']['version'],
         access_token=config['beekeeper_client']['access_token']
     )
 
