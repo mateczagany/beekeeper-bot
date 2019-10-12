@@ -1,4 +1,7 @@
-api:
+beekeeper_client:
   subdomain: {{API_SUBDOMAIN}}
   version: 2
   access_token: {{ACCESS_TOKEN}}
+
+beekeeper_bot:
+  poll_rate: 5  # how many seconds between polling conversations

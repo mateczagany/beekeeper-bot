@@ -3,20 +3,20 @@ import json
 
 import aiohttp
 
-from beekeeper_bot.client.api_settings import BeekeeperClientSettings
-from beekeeper_bot.client.conversation import Conversation
-from beekeeper_bot.client.exceptions import BeekeeperBotException
+from beekeeper_api.client_settings import BeekeeperClientSettings
+from beekeeper_api.conversation import Conversation
+from beekeeper_api.exceptions import BeekeeperBotException
 
 logger = logging.getLogger(__name__)
 
 
 class BeekeeperClient:
-    def __init__(self, api_settings):
+    def __init__(self, client_settings):
         """
         Args:
-            api_settings (BeekeeperClientSettings):
+            client_settings (BeekeeperClientSettings):
         """
-        self.api_settings = api_settings
+        self.client_settings = client_settings
         self.session = aiohttp.ClientSession()
 
     async def __aenter__(self):
@@ -41,7 +41,7 @@ class BeekeeperClient:
         if endpoint[0] != '/':
             endpoint = f'/{endpoint}'
 
-        return f'https://{self.api_settings.subdomain}.beekeeper.io/api/{self.api_settings.api_version}{endpoint}'
+        return f'https://{self.client_settings.subdomain}.beekeeper.io/api/{self.client_settings.api_version}{endpoint}'
 
     def _get_headers(self):
         """
@@ -50,7 +50,7 @@ class BeekeeperClient:
             dict[str, str]: headers
         """
         return {
-            'Authorization': f'Token {self.api_settings.access_token}',
+            'Authorization': f'Token {self.client_settings.access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }

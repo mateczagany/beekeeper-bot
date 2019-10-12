@@ -5,10 +5,10 @@ import typing
 
 from dataclasses import dataclass
 
-from beekeeper_bot.client.message import Message
+from beekeeper_api.message import Message
 
 if typing.TYPE_CHECKING:
-    from beekeeper_bot.client.beekeeper_client import BeekeeperClient
+    from beekeeper_api.client import BeekeeperClient
 
 
 @dataclass
