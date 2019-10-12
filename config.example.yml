@@ -1,0 +1,4 @@
+api:
+  subdomain: {{API_SUBDOMAIN}}
+  version: 2
+  access_token: {{ACCESS_TOKEN}}

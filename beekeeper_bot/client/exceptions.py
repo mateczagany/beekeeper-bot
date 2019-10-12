@@ -1,0 +1,2 @@
+class BeekeeperBotException(Exception):
+    pass
