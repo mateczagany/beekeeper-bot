@@ -4,4 +4,4 @@ beekeeper_client:
   access_token: {{ACCESS_TOKEN}}
 
 beekeeper_bot:
-  poll_rate: 5  # how many seconds between polling conversations
+  poll_rate: 1  # how many seconds between polling conversations

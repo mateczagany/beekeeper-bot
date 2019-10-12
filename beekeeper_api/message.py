@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 if typing.TYPE_CHECKING:
     from beekeeper_api.client import BeekeeperClient
+    from beekeeper_api.conversation import Conversation
 
 
 @dataclass
@@ -24,6 +25,10 @@ class Message:
     id: int
     uuid: str
 
+    current_receipt_state: str  # it's not actually in Beekeeper docs? it's useful for the bot though
+
+    conversation: Conversation = None
+
     @staticmethod
     def from_dict(client, data):
         """
@@ -34,3 +39,11 @@ class Message:
         ctr_args = inspect.signature(Message).parameters
         args = {k: v for k, v in data.items() if k in ctr_args.keys()}
         return Message(client=client, **args)
+
+    async def mark_read(self):
+        """
+        Marks all messages up to this message as read
+        Returns:
+            None
+        """
+        await self.client.post(f'/conversations/{self.conversation_id}/messages/{self.id}/read')

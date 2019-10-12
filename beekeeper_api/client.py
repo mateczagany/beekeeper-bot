@@ -26,6 +26,17 @@ class BeekeeperClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.session.close()
 
+    async def _verify_settings(self):
+        """
+        Verify if we can connect to the API
+        Returns:
+            bool: can we connect
+        """
+        if 'settings' not in await self.get(endpoint='/status'):
+            raise BeekeeperBotException('Failed to get /status')
+
+        logger.info("Settings successfully verified")
+
     def _get_url(self, endpoint):
         """
         Creates a URL from an endpoint
@@ -104,17 +115,6 @@ class BeekeeperClient:
             dict: JSON result
         """
         return await self._request(method='POST', endpoint=endpoint, data=data, params=params)
-
-    async def _verify_settings(self):
-        """
-        Verify if we can connect to the API
-        Returns:
-            bool: can we connect
-        """
-        if 'settings' not in await self.get(endpoint='/status'):
-            raise BeekeeperBotException('Failed to get /status')
-
-        logger.info("Settings successfully verified")
 
     async def get_conversations(self, **kwargs):
         """
