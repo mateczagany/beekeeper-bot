@@ -4,11 +4,10 @@ import sys
 
 import yaml
 
-from beekeeper_api.client_settings import BeekeeperClientSettings
-from beekeeper_api.client import BeekeeperClient
-from beekeeper_api.message import Message
+from beekeeper_client.client_settings import BeekeeperClientSettings
+from beekeeper_client.client import BeekeeperClient
+from beekeeper_client.models.message import Message
 from beekeeper_bot.bot import BeekeeperBot
-from beekeeper_bot.bot_settings import BeekeeperBotSettings
 
 
 # TODO: better logging
@@ -20,18 +19,20 @@ root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(console_handler)
 
 logging.getLogger('asyncio').setLevel(logging.WARNING)
+logging.getLogger('pubnub').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
 
-async def callback_test(bot, message):
+def callback_test(bot, message):
     """
     Args:
         bot (BeekeeperBot):  bot
         message (Message): message object
     """
     logger.info(f"Got message from {message.profile} at {message.created}: {message.text}")
-    await message.conversation.send_message(f'I got your message: {message.text}')
+    # TODO: callbacks should be called as async
+    # await message.conversation.send_message(f'I got your message: {message.text}')
 
 
 async def main():
@@ -43,17 +44,21 @@ async def main():
         access_token=config['beekeeper_client']['access_token']
     )
 
-    bot_settings = BeekeeperBotSettings(
-        poll_rate=int(config['beekeeper_bot']['poll_rate'])
-    )
-
     async with BeekeeperClient(client_settings=client_settings) as client:
-        async with BeekeeperBot(bot_settings=bot_settings, beekeeper_client=client) as bot:
+        async with BeekeeperBot(beekeeper_client=client) as bot:
             bot.add_callback(callback=callback_test)
-            try:
-                await asyncio.wait_for(bot.start(), 60)  # run for 60 seconds only
-            except asyncio.TimeoutError:
-                logger.info("Shutting down bot")
+            bot_task = asyncio.ensure_future(bot.start())
+
+            # if bot didn't exit in given timeout, then cancel it
+            await asyncio.wait([bot_task, asyncio.sleep(5)], return_when=asyncio.FIRST_COMPLETED)
+
+            if bot.is_running():
+                logger.info("Bot shutting down...")
+                bot.stop()
+
+            await bot_task
+
+            logger.info("Bot has shut down")
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

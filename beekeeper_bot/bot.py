@@ -1,29 +1,38 @@
 import asyncio
+import base64
 import logging
-from datetime import timedelta
 
-from beekeeper_api.client import BeekeeperClient
-from beekeeper_api.conversation import Conversation
-from beekeeper_api.message import Message
-from beekeeper_api.util import bkdt_to_dt, dt_to_bkdt
-from beekeeper_bot.bot_settings import BeekeeperBotSettings
+from pubnub.enums import PNReconnectionPolicy
+from pubnub.pnconfiguration import PNConfiguration
+from pubnub.pubnub_asyncio import PubNubAsyncio
+
+from beekeeper_bot.message_decrypter import BeekeeperBotMessageDecrypter
+from beekeeper_bot.message_listener import BeekeeperBotMessageListener
+from beekeeper_client.client import BeekeeperClient
+from beekeeper_client.models.message import Message
+from beekeeper_bot.exceptions import BeekeeperBotException
 
 logger = logging.getLogger(__name__)
 
 
 class BeekeeperBot:
-    def __init__(self, bot_settings, beekeeper_client):
+    def __init__(self, beekeeper_client):
         """
         Args:
-            bot_settings (BeekeeperBotSettings): bot settings
             beekeeper_client (BeekeeperClient): client
         """
-        self.bot_settings = bot_settings
-        self.client = beekeeper_client
+        self._client = beekeeper_client
 
-        self.should_exit = False
-        self.callbacks = []
+        self._is_running = False
+        self._callbacks = []
         self.conversation_data = {}
+
+        try:
+            self._pubnub_key = self._client.user_config['tenant']['integrations']['pubnub']['subscribe_key']
+            self._pubnub_channel_name = self._client.user_config['enc_channel']['channel']
+            self._pubnub_channel_key = self._client.user_config['enc_channel']['key']
+        except KeyError:
+            raise BeekeeperBotException('Failed to retrieve PubNub settings')
 
     async def __aenter__(self):
         return self
@@ -31,70 +40,22 @@ class BeekeeperBot:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return
 
-    async def _on_message(self, message):
+    def on_message(self, message):
         """
-        Called internally when there is a new message, this function will call callbacks as well
+        Called by the message listener when there is a new message, this function will call callbacks as well
         Args:
             message (Message): new message
         Returns:
             None
         """
-        for cb in self.callbacks:
-            await cb(self, message)
+        for cb in self._callbacks:
+            cb(self, message)
 
-    async def _poll_conversation(self, conv):
+    def get_client(self):
         """
-        Get new messages from given conversation
-        Args:
-            conv (Conversation): conversation object
         Returns:
-            None
+            BeekeeperClient: beekeeper client object
         """
-        # is_unread wasn't always properly set for me, so I'm looking at `modified` here to see if we received new msg
-        # even though we will also process messages that were sent by us, the bot doesn't miss any messages this way
-        if bkdt_to_dt(conv.modified) == self.conversation_data[conv.id]['last_modified']:
-            return
-
-        logger.debug(f'Got unread message in {conv.name}, snippet: {conv.snippet}')
-
-        if conv.id in self.conversation_data:
-            after_date = self.conversation_data[conv.id]['last_modified'] - timedelta(seconds=1)
-            messages = await conv.get_messages(after=dt_to_bkdt(after_date))
-
-            self.conversation_data[conv.id]['last_modified'] = bkdt_to_dt(conv.modified)
-        else:
-            messages = await conv.get_messages()
-            self.conversation_data[conv.id] = {
-                'last_modified': bkdt_to_dt(conv.modified),
-                'messages_read': set()
-            }
-
-        if not messages:
-            logger.warning(f'No messages for conversation {conv.name} even though it was marked as unread')
-            return
-
-        for message in messages:
-            if message.sent_by_user:
-                continue
-
-            if message.id in self.conversation_data[conv.id]['messages_read']:
-                continue
-
-            self.conversation_data[conv.id]['messages_read'].add(message.id)
-
-            await self._on_message(message)
-
-        await conv.mark_read()
-
-    async def _poll_messages(self):
-        """
-        Called at every X seconds to poll all conversations
-        Returns:
-            None
-        """
-        conversations = await self.client.get_conversations()
-        futures = [self._poll_conversation(conv) for conv in conversations]
-        await asyncio.gather(*futures)
 
     def add_callback(self, callback):
         """
@@ -104,39 +65,49 @@ class BeekeeperBot:
         Returns:
             None
         """
-        self.callbacks.append(callback)
+        self._callbacks.append(callback)
 
     async def start(self):
         """
-        Start polling messages, will only stop after stop() is called
+        Sets up PubNub listener to given conversation so we get real-time notifications of messages
+        This will run until stop() is called
         Returns:
             None
         """
-        # First mark all messages read, we only need to read the last message for this
-        # We may want to get rid of this in the future to process messages that were sent while the bot was offline
-        futures = []
-        for conv in await self.client.get_conversations():
-            messages = await conv.get_messages(limit=1)
-            if messages:
-                self.conversation_data[conv.id] = {
-                    'last_modified': bkdt_to_dt(conv.modified),
-                    'messages_read': set()
-                }
-                futures.append(messages[0].mark_read())
+        message_decrypter = BeekeeperBotMessageDecrypter(base64.b64decode(self._pubnub_channel_key))
 
-            await conv.mark_read()
+        message_listener = BeekeeperBotMessageListener(bot=self, decrypter=message_decrypter)
 
-        await asyncio.gather(*futures)
+        pubnub_config = PNConfiguration()
+        pubnub_config.subscribe_key = self._pubnub_key
+        pubnub_config.reconnect_policy = PNReconnectionPolicy.LINEAR
+        pubnub_config.connect_timeout = 30
 
-        self.should_exit = False
-        while not self.should_exit:
-            await self._poll_messages()
-            await asyncio.sleep(self.bot_settings.poll_rate)
+        pubnub = PubNubAsyncio(config=pubnub_config)
+        pubnub.add_listener(message_listener)
+        pubnub.subscribe().channels([self._pubnub_channel_name]).execute()
 
-    async def stop(self):
+        self._is_running = True
+
+        while True:
+            await asyncio.sleep(.2)
+            if not self._is_running:
+                pubnub.unsubscribe_all()
+                pubnub.stop()
+                break
+
+    def stop(self):
         """
         Stop polling messages
         Returns:
             None
         """
-        self.should_exit = True
+        self._is_running = False
+
+    def is_running(self):
+        """
+        Is the bot running?
+        Returns:
+            bool: is it running
+        """
+        return self._is_running

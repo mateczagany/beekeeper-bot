@@ -1,10 +1,11 @@
 # Beekeeper Bot
 Example bot application to use with Beekeper, still WIP
 
-~~I couldn't find any way to get incoming messages real-time so the application will poll all conversation at a pre-configured rate.~~  
-TODO: We can use PubNub to get real-time events, it's not documented however
+The application uses the official PubNub library to get real-time events about messages. You won't find `BeekeeperBotMessageDecrypter` class in this repository as I wasn't sure I'm allowed to publish the logic here.
 
-Please see a very simple example in [main.py](/main.py) - `callback_test()` will be called on every message the bot receives and it will also send back a message. 
+Please see a very simple example in [main.py](/main.py) - `callback_test()` will be called on every message the bot receives and it will also send back a message.
+ 
+TODO: PubNub async support is limited, message callbacks are always called as sync functions, find a solution for this
 
 ## Requirements:
 - Python 3.7

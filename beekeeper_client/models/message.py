@@ -5,8 +5,8 @@ import typing
 from dataclasses import dataclass
 
 if typing.TYPE_CHECKING:
-    from beekeeper_api.client import BeekeeperClient
-    from beekeeper_api.conversation import Conversation
+    from beekeeper_client.client import BeekeeperClient
+    from beekeeper_client.models.conversation import Conversation
 
 
 @dataclass

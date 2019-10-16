@@ -3,9 +3,9 @@ import json
 
 import aiohttp
 
-from beekeeper_api.client_settings import BeekeeperClientSettings
-from beekeeper_api.conversation import Conversation
-from beekeeper_api.exceptions import BeekeeperBotException
+from beekeeper_client.client_settings import BeekeeperClientSettings
+from beekeeper_client.models.conversation import Conversation
+from beekeeper_client.exceptions import BeekeeperClientException
 
 logger = logging.getLogger(__name__)
 
@@ -19,26 +19,26 @@ class BeekeeperClient:
         Args:
             client_settings (BeekeeperClientSettings):
         """
-        self.client_settings = client_settings
-        self.session = aiohttp.ClientSession()
+        self._client_settings = client_settings
+        self._session = aiohttp.ClientSession()
+
+        self.user_config = None
 
     async def __aenter__(self):
-        await self._verify_settings()
+        await self._retrieve_user_config()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.session.close()
+        await self._session.close()
 
-    async def _verify_settings(self):
+    async def _retrieve_user_config(self):
         """
-        Verify if we can connect to the API
+        Download user config via /config/client
         Returns:
-            bool: can we connect
+            None
         """
-        if 'settings' not in await self.get(endpoint='/status'):
-            raise BeekeeperBotException('Failed to get /status')
-
-        logger.info("Settings successfully verified")
+        self.user_config = await self.get('/config/client')
+        logger.info("Client config successfully downloaded")
 
     def _get_url(self, endpoint):
         """
@@ -51,11 +51,11 @@ class BeekeeperClient:
         """
         endpoint = endpoint.strip()
         if not endpoint:
-            raise BeekeeperBotException('URL is invalid')
+            raise BeekeeperClientException('URL is invalid')
         if endpoint[0] != '/':
             endpoint = f'/{endpoint}'
 
-        return f'https://{self.client_settings.subdomain}.beekeeper.io/api/{API_VERSION}{endpoint}'
+        return f'https://{self._client_settings.subdomain}.beekeeper.io/api/{API_VERSION}{endpoint}'
 
     def _get_headers(self):
         """
@@ -64,7 +64,7 @@ class BeekeeperClient:
             dict[str, str]: headers
         """
         return {
-            'Authorization': f'Token {self.client_settings.access_token}',
+            'Authorization': f'Token {self._client_settings.access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
@@ -84,15 +84,15 @@ class BeekeeperClient:
         headers = self._get_headers()
 
         if method == "GET":
-            result = await self.session.get(url, params=params, headers=headers)
+            result = await self._session.get(url, params=params, headers=headers)
         elif method == "POST":
-            result = await self.session.post(url, json=data, params=params, headers=headers)
+            result = await self._session.post(url, json=data, params=params, headers=headers)
         else:
-            raise BeekeeperBotException(f'Unknown method: {method}')
+            raise BeekeeperClientException(f'Unknown method: {method}')
 
         result_json = await result.json(encoding='utf-8')
         if result.status >= 400:
-            raise BeekeeperBotException(f'Error while {method}\'ing {endpoint}: {json.dumps(result_json)}')
+            raise BeekeeperClientException(f'Error while {method}\'ing {endpoint}: {json.dumps(result_json)}')
 
         return result_json
 
