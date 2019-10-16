@@ -66,7 +66,6 @@ class Conversation:
         messages = []
         for message_raw in result:
             message = Message.from_dict(client=self.client, data=message_raw)
-            message.conversation = self
             messages.append(message)
 
         return messages

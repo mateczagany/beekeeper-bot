@@ -16,12 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 class BeekeeperBot:
-    def __init__(self, beekeeper_client):
+    def __init__(self, beekeeper_client, event_loop):
         """
         Args:
             beekeeper_client (BeekeeperClient): client
+            event_loop
         """
         self._client = beekeeper_client
+        self._event_loop = event_loop or asyncio.get_event_loop()
 
         self._is_running = False
         self._callbacks = []
@@ -48,14 +50,15 @@ class BeekeeperBot:
         Returns:
             None
         """
-        for cb in self._callbacks:
-            cb(self, message)
+        futures = [cb(self, message) for cb in self._callbacks]
+        asyncio.ensure_future(*futures, loop=self._event_loop)
 
     def get_client(self):
         """
         Returns:
             BeekeeperClient: beekeeper client object
         """
+        return self._client
 
     def add_callback(self, callback):
         """

@@ -24,15 +24,18 @@ logging.getLogger('pubnub').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def callback_test(bot, message):
+async def callback_test(bot, message):
     """
     Args:
         bot (BeekeeperBot):  bot
         message (Message): message object
     """
+    if message.sent_by_user:
+        return
+
     logger.info(f"Got message from {message.profile} at {message.created}: {message.text}")
-    # TODO: callbacks should be called as async
-    # await message.conversation.send_message(f'I got your message: {message.text}')
+    conversation = await message.get_conversation()
+    await conversation.send_message(f'I got your message: {message.text}')
 
 
 async def main():
@@ -45,12 +48,12 @@ async def main():
     )
 
     async with BeekeeperClient(client_settings=client_settings) as client:
-        async with BeekeeperBot(beekeeper_client=client) as bot:
+        async with BeekeeperBot(beekeeper_client=client, event_loop=asyncio.get_event_loop()) as bot:
             bot.add_callback(callback=callback_test)
             bot_task = asyncio.ensure_future(bot.start())
 
             # if bot didn't exit in given timeout, then cancel it
-            await asyncio.wait([bot_task, asyncio.sleep(5)], return_when=asyncio.FIRST_COMPLETED)
+            await asyncio.wait([bot_task, asyncio.sleep(600)], return_when=asyncio.FIRST_COMPLETED)
 
             if bot.is_running():
                 logger.info("Bot shutting down...")

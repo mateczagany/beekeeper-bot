@@ -27,8 +27,6 @@ class Message:
 
     current_receipt_state: str  # it's not actually in Beekeeper docs? it might be useful for the bot though
 
-    conversation: Conversation = None
-
     @staticmethod
     def from_dict(client, data):
         """
@@ -39,6 +37,14 @@ class Message:
         ctr_args = inspect.signature(Message).parameters
         args = {k: v for k, v in data.items() if k in ctr_args.keys()}
         return Message(client=client, **args)
+
+    async def get_conversation(self):
+        """
+        Retrieves the conversation object this message belongs to
+        Returns:
+            Conversation: conversation of this message
+        """
+        return await self.client.get_conversation_by_id(self.conversation_id)
 
     async def mark_read(self):
         """

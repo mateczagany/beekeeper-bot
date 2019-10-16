@@ -127,3 +127,14 @@ class BeekeeperClient:
         """
         result = await self.get('/conversations', params=kwargs)
         return [Conversation.from_dict(client=self, data=conv_raw) for conv_raw in result]
+
+    async def get_conversation_by_id(self, conversation_id, **kwargs):
+        """
+        Retrieves conversation by ID
+        Args:
+            conversation_id (int|str): conversation ID
+        Returns:
+            Conversation: conversations
+        """
+        result = await self.get(f'/conversations/{conversation_id}', params=kwargs)
+        return Conversation.from_dict(client=self, data=result)
