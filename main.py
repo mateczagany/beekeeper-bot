@@ -49,19 +49,12 @@ async def main():
 
     async with BeekeeperClient(client_settings=client_settings) as client:
         async with BeekeeperBot(beekeeper_client=client, event_loop=asyncio.get_event_loop()) as bot:
+            logger.info("Bot has started")
             bot.add_callback(callback=callback_test)
-            bot_task = asyncio.ensure_future(bot.start())
 
-            # if bot didn't exit in given timeout, then cancel it
-            await asyncio.wait([bot_task, asyncio.sleep(600)], return_when=asyncio.FIRST_COMPLETED)
+            await asyncio.sleep(2)
 
-            if bot.is_running():
-                logger.info("Bot shutting down...")
-                bot.stop()
-
-            await bot_task
-
-            logger.info("Bot has shut down")
+    logger.info("Bot has shut down")
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

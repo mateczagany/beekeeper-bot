@@ -25,6 +25,7 @@ class BeekeeperBot:
         self._client = beekeeper_client
         self._event_loop = event_loop or asyncio.get_event_loop()
 
+        self._pubnub = None
         self._is_running = False
         self._callbacks = []
         self.conversation_data = {}
@@ -37,10 +38,23 @@ class BeekeeperBot:
             raise BeekeeperBotException('Failed to retrieve PubNub settings')
 
     async def __aenter__(self):
+        message_decrypter = BeekeeperBotMessageDecrypter(base64.b64decode(self._pubnub_channel_key))
+        message_listener = BeekeeperBotMessageListener(bot=self, decrypter=message_decrypter)
+
+        pubnub_config = PNConfiguration()
+        pubnub_config.subscribe_key = self._pubnub_key
+        pubnub_config.reconnect_policy = PNReconnectionPolicy.LINEAR
+        pubnub_config.connect_timeout = 30
+
+        self._pubnub = PubNubAsyncio(config=pubnub_config)
+        self._pubnub.add_listener(message_listener)
+        self._pubnub.subscribe().channels([self._pubnub_channel_name]).execute()
+
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return
+        self._pubnub.unsubscribe_all()
+        self._pubnub.stop()
 
     def on_message(self, message):
         """
@@ -69,48 +83,3 @@ class BeekeeperBot:
             None
         """
         self._callbacks.append(callback)
-
-    async def start(self):
-        """
-        Sets up PubNub listener to given conversation so we get real-time notifications of messages
-        This will run until stop() is called
-        Returns:
-            None
-        """
-        message_decrypter = BeekeeperBotMessageDecrypter(base64.b64decode(self._pubnub_channel_key))
-
-        message_listener = BeekeeperBotMessageListener(bot=self, decrypter=message_decrypter)
-
-        pubnub_config = PNConfiguration()
-        pubnub_config.subscribe_key = self._pubnub_key
-        pubnub_config.reconnect_policy = PNReconnectionPolicy.LINEAR
-        pubnub_config.connect_timeout = 30
-
-        pubnub = PubNubAsyncio(config=pubnub_config)
-        pubnub.add_listener(message_listener)
-        pubnub.subscribe().channels([self._pubnub_channel_name]).execute()
-
-        self._is_running = True
-
-        while True:
-            await asyncio.sleep(.2)
-            if not self._is_running:
-                pubnub.unsubscribe_all()
-                pubnub.stop()
-                break
-
-    def stop(self):
-        """
-        Stop polling messages
-        Returns:
-            None
-        """
-        self._is_running = False
-
-    def is_running(self):
-        """
-        Is the bot running?
-        Returns:
-            bool: is it running
-        """
-        return self._is_running
