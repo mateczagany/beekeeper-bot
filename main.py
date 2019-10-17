@@ -52,7 +52,7 @@ async def main():
             logger.info("Bot has started")
             bot.add_callback(callback=callback_test)
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(60)
 
     logger.info("Bot has shut down")
 
