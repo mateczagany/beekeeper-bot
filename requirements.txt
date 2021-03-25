@@ -1,4 +1,4 @@
-pyyaml==5.1.2
+pyyaml==5.4
 aiohttp==3.6.2
 pubnub==4.1.6
 pycryptodome==3.9.0
